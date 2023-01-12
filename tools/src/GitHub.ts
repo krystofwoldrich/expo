@@ -9,6 +9,8 @@ const octokit = new Octokit({
   auth: process.env.GITHUB_TOKEN,
 });
 
+const cachedPullRequests = new Map<number, PullRequest>();
+
 // Predefine some params used across almost all requests.
 const owner = 'expo';
 const repo = 'expo';
@@ -30,7 +32,23 @@ export async function getPullRequestAsync(pull_number: number): Promise<PullRequ
     repo,
     pull_number,
   });
+  cachedPullRequests.set(pull_number, data);
   return data;
+}
+
+/**
+ * Gets a cached version of the pull request if exists,
+ * otherwise requests for the pull request and saves in the cache.
+ */
+export async function getCachedPullRequestAsync(pull_number: number): Promise<PullRequest> {
+  const cachedPullRequest = cachedPullRequests.get(pull_number);
+
+  if (cachedPullRequest) {
+    return cachedPullRequest;
+  }
+  const pullRequest = await getPullRequestAsync(pull_number);
+  cachedPullRequests.set(pull_number, pullRequest);
+  return pullRequest;
 }
 
 /**

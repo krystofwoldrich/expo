@@ -1,4 +1,5 @@
 import chalk from 'chalk';
+import inquirer from 'inquirer';
 import path from 'path';
 
 import { ChangelogEntry, UNPUBLISHED_VERSION_NAME } from '../../Changelogs';
@@ -19,10 +20,6 @@ type CommentRowObject = {
   pullRequests: number[];
 };
 
-/**
- * Dispatches GitHub Actions workflow that adds comments to the issues
- * that were closed by pull requests mentioned in the changelog changes.
- */
 export const commentOnIssuesTask = new Task<TaskArgs>(
   {
     name: 'commentOnIssuesTask',
@@ -196,4 +193,23 @@ function linkToNpmPackage(packageName: string, version: string): string {
 function linkToChangelog(pkg: Package): string {
   const changelogRelativePath = path.relative(EXPO_DIR, pkg.changelogPath);
   return `[CHANGELOG.md](https://github.com/expo/expo/blob/main/${changelogRelativePath})`;
+}
+
+/**
+ * Prompts whether you want the bot to comment on the issues to inform the users about the release.
+ */
+async function shouldCommentAsync(): Promise<boolean> {
+  if (process.env.CI) {
+    return false;
+  }
+  const { proceed } = await inquirer.prompt<{ proceed: boolean }>([
+    {
+      type: 'confirm',
+      name: 'proceed',
+      prefix: '❔',
+      message: chalk.yellow('Do you want the expo-bot to comment on these issues?'),
+      default: false,
+    },
+  ]);
+  return !proceed;
 }
