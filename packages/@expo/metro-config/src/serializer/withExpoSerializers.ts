@@ -71,6 +71,12 @@ export function createDefaultExportCustomSerializer(config: Partial<MetroConfig>
     graph: ReadOnlyGraph<MixedOutput>,
     options: SerializerOptions<MixedOutput>
   ): Promise<string | { code: string; map: string }> => {
+    // If custom serializer is defined, use it instead.
+    // We don't know how the bundle will be serialized, so we can't safely determine the debugId.
+    if (config.serializer?.customSerializer) {
+      return config.serializer?.customSerializer(entryPoint, preModules, graph, options);
+    }
+
     const isPossiblyDev = graph.transformOptions.hot;
     // TODO: This is a temporary solution until we've converged on using the new serializer everywhere.
     const enableDebugId = options.inlineSourceMap !== true && !isPossiblyDev;
@@ -94,27 +100,12 @@ export function createDefaultExportCustomSerializer(config: Partial<MetroConfig>
     let bundleCode: string | null = null;
     let bundleMap: string | null = null;
 
-    if (config.serializer?.customSerializer) {
-      const bundle = await config.serializer?.customSerializer(
-        entryPoint,
-        preModules,
-        graph,
-        options
-      );
-      if (typeof bundle === 'string') {
-        bundleCode = bundle;
-      } else {
-        bundleCode = bundle.code;
-        bundleMap = bundle.map;
-      }
-    } else {
-      bundleCode = bundleToString(
-        baseJSBundle(entryPoint, preModules, graph, {
-          ...options,
-          debugId: loadDebugId(),
-        })
-      ).code;
-    }
+    bundleCode = bundleToString(
+      baseJSBundle(entryPoint, preModules, graph, {
+        ...options,
+        debugId: loadDebugId(),
+      })
+    ).code;
 
     if (isPossiblyDev) {
       if (bundleMap == null) {
@@ -127,19 +118,16 @@ export function createDefaultExportCustomSerializer(config: Partial<MetroConfig>
     }
 
     // Exports....
-
-    if (!bundleMap) {
-      bundleMap = sourceMapString(
-        [...preModules, ...getSortedModules([...graph.dependencies.values()], options)],
-        {
-          // TODO: Surface this somehow.
-          excludeSource: false,
-          // excludeSource: options.serializerOptions?.excludeSource,
-          processModuleFilter: options.processModuleFilter,
-          shouldAddToIgnoreList: options.shouldAddToIgnoreList,
-        }
-      );
-    }
+    bundleMap = sourceMapString(
+      [...preModules, ...getSortedModules([...graph.dependencies.values()], options)],
+      {
+        // TODO: Surface this somehow.
+        excludeSource: false,
+        // excludeSource: options.serializerOptions?.excludeSource,
+        processModuleFilter: options.processModuleFilter,
+        shouldAddToIgnoreList: options.shouldAddToIgnoreList,
+      }
+    );
 
     if (enableDebugId) {
       const mutateSourceMapWithDebugId = (sourceMap: string) => {
@@ -158,6 +146,7 @@ export function createDefaultExportCustomSerializer(config: Partial<MetroConfig>
       };
     }
 
+    // Inline source maps.
     return {
       code: bundleCode,
       map: bundleMap,
